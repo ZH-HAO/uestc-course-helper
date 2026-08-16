@@ -15,9 +15,23 @@ uestc-course-helper/
 
 ## 安装
 
+**方式一：一键安装（推荐）**
+
+直接在 Edge 打开下面的链接，Tampermonkey 会自动弹出安装页，点"安装"即可：
+
+```
+https://raw.githubusercontent.com/ZH-HAO/uestc-course-helper/main/uestc-course-helper.user.js
+```
+
+**方式二：手动新建脚本**
+
 1. Edge 安装 **Tampermonkey** 扩展（`edge://extensions` 搜索）
-2. 把 `uestc-course-helper.user.js` **拖进 Edge**，点安装
-3. 打开课程页刷新，右下角出现"刷课助手"浮动面板即成功
+2. 点油猴图标 → **管理面板** → 点 **+**（添加新脚本）
+3. 把编辑器里的默认内容**全选删除**，粘贴 `uestc-course-helper.user.js` 的全部代码
+4. **Ctrl+S** 保存
+5. 打开课程页刷新，右下角出现"刷课助手"浮动面板即成功
+
+> 注意：**不要直接把 `.user.js` 文件拖进 Edge**，Edge 会当成普通文件下载，不会触发油猴安装。
 
 ## 功能
 
