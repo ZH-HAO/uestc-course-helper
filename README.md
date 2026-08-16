@@ -1,4 +1,4 @@
-# 电子科技大学（成电）教学资源管理平台 · 刷课助手
+# 成电教学资源管理平台 · 刷课助手
 
 > 作者：Tay · License: MIT
 
@@ -41,6 +41,7 @@ https://raw.githubusercontent.com/ZH-HAO/uestc-course-helper/main/uestc-course-h
 | 倍速 | 面板或键盘 `[` / `]` 调节：1 / 1.25 / 1.5 / 2 / 4 / 8 / 16x |
 | 拉进度 | 一键跳到末尾前 1 秒，再播完触发平台判定完成 |
 | 自动切节 | 视频结束自动点"下一个学习内容"按钮，带 5 次重试 |
+| 卡顿刷新 | 视频卡死 30 秒自动刷新页面（平台续播不丢进度），连续 3 次后停止 |
 | 自动确认 | 自动接受页面 confirm 弹窗 |
 
 ## 使用建议
@@ -79,7 +80,7 @@ https://raw.githubusercontent.com/ZH-HAO/uestc-course-helper/main/uestc-course-h
 
 ## 维护说明
 
-脚本 v0.2.0 已按平台源码精确适配，改动播放器结构后需同步更新：
+脚本 v0.2.1 已按平台源码精确适配，改动播放器结构后需同步更新：
 
 - 播放器容器：`#h5player`（xgplayer）
 - 下一节按钮：`.next_video_btn`（文本"下一个学习内容"，在 `.xgplayer-replay` 内）
