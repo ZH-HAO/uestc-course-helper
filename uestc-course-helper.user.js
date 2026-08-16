@@ -2,9 +2,9 @@
 // @name         成电教学资源管理平台 刷课助手
 // @name:zh-CN   成电教学资源管理平台 刷课助手
 // @namespace    workbuddy.uestc-course-helper
-// @version      0.2.0
-// @description  自动播放+倍速、自动拉进度、视频结束自动切换下一节（适配 xgplayer / #h5player / .next_video_btn）
-// @author       WorkBuddy
+// @version      0.2.1
+// @description  自动播放+倍速、自动拉进度、视频结束自动切换下一节、卡顿自动刷新（适配 xgplayer / #h5player / .next_video_btn）
+// @author       Tay
 // @match        *://resource.uestc.edu.cn/*
 // @match        *://*.uestc.edu.cn/*
 // @grant        GM_getValue
@@ -26,8 +26,14 @@
  * 平台行为记录（重要）：
  *   - 拖拽进度、倍速操作都会被记录到后端 reqVideoBehaviorRecord
  *   - 本课程 allowed_double_speed=false（倍速 UI 上限 2x）、allowed_drag=true（允许拖进度）
- *   → 建议倍速不要超过 2x；拉进度在“允许拖进度”的课程上才安全
+ *   → 建议倍速不要超过 2x；拉进度在"允许拖进度"的课程上才安全
  *   → 拉到末尾后脚本会让视频再播完最后 1~2 秒，触发 ended 使服务端判定完成
+ *
+ * v0.2.1 新增：卡顿自动刷新
+ *   - 检测视频 currentTime 连续 30 秒不变（且非暂停/非结束）→ 判定卡死 → 自动刷新页面
+ *   - 平台 memoryPlay 会从断点续播，不丢进度
+ *   - 刷新冷却 60 秒，连续刷新上限 3 次（防止死循环），正常播放 90 秒后重置计数
+ *   - 面板"卡顿刷新"开关可关闭
  * ===================================================
  */
 
@@ -47,10 +53,14 @@
     speed: Number(GM_getValue('speed', 2)) || 2,
     jumpToEnd: !!GM_getValue('jumpToEnd', false),
     autoNext: !!GM_getValue('autoNext', true),
+    autoRefresh: !!GM_getValue('autoRefresh', true),
     autoPlay: true,
   };
   const SPEEDS = [1, 1.25, 1.5, 2, 4, 8, 16];
   const MAX_SAFE_SPEED = 2; // 平台倍速上限（allowed_double_speed=false）
+  const STALL_THRESHOLD = 30; // 卡死多少秒触发刷新
+  const REFRESH_COOLDOWN = 60; // 两次刷新最小间隔（秒）
+  const MAX_REFRESH = 3; // 连续刷新上限
   const save = (k) => GM_setValue(k, CFG[k]);
 
   // ---------------- 通用小工具 ----------------
@@ -68,6 +78,24 @@
   function isDisabled(el) {
     return !!el.disabled || el.getAttribute('aria-disabled') === 'true' ||
       el.classList.contains('disabled') || el.classList.contains('is-disabled');
+  }
+
+  // ---------------- 卡顿自动刷新：localStorage 状态 ----------------
+  const LS_LAST_REFRESH = '__ch_last_refresh';
+  const LS_REFRESH_COUNT = '__ch_refresh_count';
+  function canRefresh() {
+    const last = Number(localStorage.getItem(LS_LAST_REFRESH) || 0);
+    return Date.now() - last > REFRESH_COOLDOWN * 1000;
+  }
+  function getRefreshCount() {
+    return Number(localStorage.getItem(LS_REFRESH_COUNT) || 0);
+  }
+  function markRefresh(n) {
+    localStorage.setItem(LS_LAST_REFRESH, String(Date.now()));
+    if (n != null) localStorage.setItem(LS_REFRESH_COUNT, String(n));
+  }
+  function resetRefreshCount() {
+    localStorage.setItem(LS_REFRESH_COUNT, '0');
   }
 
   // ---------------- Toast 提示 ----------------
@@ -212,6 +240,40 @@
     });
     video.addEventListener('play', () => { endedFired = false; });
 
+    // 卡顿检测：currentTime 连续 N 秒不变（且非暂停/非结束）→ 判定卡死 → 自动刷新
+    if (isTop) {
+      let lastCur = -1, lastMoveAt = Date.now(), stableSince = 0;
+      setInterval(() => {
+        if (!CFG.autoRefresh) return;
+        if (video.paused || video.ended) return;
+        const cur = video.currentTime;
+        if (cur !== lastCur) {
+          lastCur = cur;
+          lastMoveAt = Date.now();
+          stableSince = stableSince || Date.now();
+          // 连续正常播放 90s，重置刷新计数（给"重新来过"的机会）
+          if (Date.now() - stableSince > 90000) {
+            resetRefreshCount();
+            stableSince = Date.now();
+          }
+        } else {
+          stableSince = 0;
+          const stalledMs = Date.now() - lastMoveAt;
+          if (stalledMs > STALL_THRESHOLD * 1000 && canRefresh()) {
+            const cnt = getRefreshCount() + 1;
+            if (cnt > MAX_REFRESH) {
+              toast('⚠ 视频连续卡死 ' + MAX_REFRESH + ' 次，停止自动刷新，请手动检查网络/平台');
+              markRefresh(cnt); // 进入冷却，避免重复提示
+              return;
+            }
+            markRefresh(cnt);
+            toast('⚠ 视频卡死 ' + Math.round(stalledMs / 1000) + 's，自动刷新（第 ' + cnt + ' 次）');
+            setTimeout(() => location.reload(), 1500);
+          }
+        }
+      }, 5000);
+    }
+
     // iframe 内的播放器把状态上报给顶层（成电当前是顶层页面，预留兼容）
     if (!isTop) {
       setInterval(() => {
@@ -237,7 +299,7 @@
   }
 
   // ---------------- 顶层：面板 + 消息处理 ----------------
-  let speedText = null, jumpBtn = null, nextBtn = null, statusText = null;
+  let speedText = null, jumpBtn = null, nextBtn = null, refreshBtn = null, statusText = null;
   let lastStatus = null;
 
   function btnText(t) {
@@ -332,6 +394,14 @@
     });
     addRow(p, '自动切节', nextBtn);
 
+    // 卡顿刷新行
+    refreshBtn = mkToggle(() => CFG.autoRefresh, (v) => {
+      CFG.autoRefresh = v; save('autoRefresh');
+      if (v) resetRefreshCount();
+      toast('卡顿刷新：' + (v ? '开' : '关'));
+    });
+    addRow(p, '卡顿刷新', refreshBtn);
+
     // 状态行
     statusText = document.createElement('span');
     statusText.style.cssText = 'color:#9ccc65;';
@@ -403,6 +473,7 @@
       GM_registerMenuCommand('倍速 -', () => adjustSpeed(-1));
       GM_registerMenuCommand('切换：拉进度', () => { jumpBtn && jumpBtn.click(); });
       GM_registerMenuCommand('切换：自动切节', () => { nextBtn && nextBtn.click(); });
+      GM_registerMenuCommand('切换：卡顿刷新', () => { refreshBtn && refreshBtn.click(); });
       GM_registerMenuCommand('调试：测试点下一节', () => {
         const ok = findAndClickNext();
         toast(ok ? '已尝试点击下一节' : '未找到下一节按钮');
