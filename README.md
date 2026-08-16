@@ -79,7 +79,7 @@ https://raw.githubusercontent.com/ZH-HAO/uestc-course-helper/main/uestc-course-h
 
 ## 维护说明
 
-脚本 v0.3.0 已按平台源码精确适配，改动播放器结构后需同步更新：
+脚本 v0.2.0 已按平台源码精确适配，改动播放器结构后需同步更新：
 
 - 播放器容器：`#h5player`（xgplayer）
 - 下一节按钮：`.next_video_btn`（文本"下一个学习内容"，在 `.xgplayer-replay` 内）
